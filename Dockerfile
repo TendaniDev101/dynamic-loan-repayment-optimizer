@@ -17,8 +17,8 @@ ENV PIP_NO_CACHE_DIR=1
 
 WORKDIR /app
 
-COPY requirements.txt ./
-RUN pip install -r requirements.txt
+COPY requirements.local.txt ./
+RUN pip install -r requirements.local.txt
 
 COPY backend ./backend
 COPY main.py ./

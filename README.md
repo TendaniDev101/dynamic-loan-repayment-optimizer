@@ -49,6 +49,8 @@ uv run pywrangler deploy
 
 The Worker configuration lives in `wrangler.jsonc`, the Python Worker entrypoint is `worker.py`, and the frontend is deployed as static assets from `frontend/dist`.
 
+For local backend and Docker workflows, Python runtime dependencies are kept in `requirements.local.txt`.
+
 ## Stack
 
 - React + Vite

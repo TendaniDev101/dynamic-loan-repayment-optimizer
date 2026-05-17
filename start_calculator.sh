@@ -5,7 +5,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VENV_DIR="$ROOT_DIR/venv"
 VENV_PYTHON="$VENV_DIR/bin/python"
-REQUIREMENTS_FILE="$ROOT_DIR/requirements.txt"
+REQUIREMENTS_FILE="$ROOT_DIR/requirements.local.txt"
 FRONTEND_DIR="$ROOT_DIR/frontend"
 NODE_VERSION_FILE="$ROOT_DIR/.nvmrc"
 NODE_VERSION="${NODE_VERSION:-$(<"$NODE_VERSION_FILE")}"
