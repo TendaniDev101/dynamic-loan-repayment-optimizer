@@ -1,5 +1,5 @@
 {
-  "name": "dynamic-loan-repayment-optimizer",
+  "name": "worker-yellow-butterfly-0821",
   "main": "worker.py",
   "compatibility_date": "2026-05-17",
   "compatibility_flags": ["python_workers"],
