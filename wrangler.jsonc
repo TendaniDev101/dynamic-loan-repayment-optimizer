@@ -5,8 +5,7 @@
   "compatibility_flags": ["python_workers"],
   "workers_dev": true,
   "build": {
-    "command": "npm run build",
-    "cwd": "frontend",
+    "command": "npm --prefix frontend run build",
     "watch_dir": "frontend"
   },
   "assets": {
