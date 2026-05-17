@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "dynamic-loan-repayment-optimizer"
 version = "0.1.0"
@@ -13,3 +17,7 @@ dev = [
   "workers-py>=1.90.0",
   "workers-runtime-sdk>=1.1.4",
 ]
+
+[tool.setuptools.packages.find]
+include = ["backend*"]
+exclude = ["backend.tests*"]
