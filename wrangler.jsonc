@@ -5,6 +5,7 @@
   "compatibility_flags": ["python_workers"],
   "workers_dev": true,
   "build": {
+    
     "command": "npm --prefix frontend ci && npm --prefix frontend run build",
     "watch_dir": "frontend"
   },
