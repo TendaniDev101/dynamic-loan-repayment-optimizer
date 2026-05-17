@@ -1,0 +1,16 @@
+.git/
+.github/
+.venv/
+.venv-workers/
+venv/
+__pycache__/
+.pytest_cache/
+backend/tests/
+frontend/node_modules/
+frontend/src/
+frontend/public/
+frontend/package.json
+frontend/package-lock.json
+frontend/vite.config.js
+frontend/eslint.config.js
+frontend/README.md
