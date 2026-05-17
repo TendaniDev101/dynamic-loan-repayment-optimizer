@@ -1,1 +1,32 @@
 # dynamic-loan-repayment-optimizer
+
+A small loan planning tool for testing repayment strategies before committing to a long-term debt path.
+
+It combines a React frontend with a FastAPI backend to show:
+- base repayment amount
+- total paid and interest paid
+- savings from extra repayments
+- payoff term reduction
+- amortization schedule and payment composition
+
+## Run locally
+
+```bash
+./start_calculator.sh
+```
+
+The app starts the backend and frontend dev servers for local development.
+
+## Run with Docker
+
+```bash
+docker compose up --build
+```
+
+Then open `http://localhost:8000`.
+
+## Stack
+
+- React + Vite
+- FastAPI
+- Docker / Docker Compose
