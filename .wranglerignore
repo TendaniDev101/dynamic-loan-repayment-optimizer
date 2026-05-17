@@ -1,12 +1,19 @@
 .git/
 .github/
+.wrangler/
 .venv/
+.venv/**
 .venv-workers/
+.venv-workers/**
 venv/
+venv/**
 __pycache__/
 .pytest_cache/
 backend/tests/
+dynamic_loan_repayment_optimizer.egg-info/
+dynamic_loan_repayment_optimizer.egg-info/**
 frontend/node_modules/
+frontend/node_modules/**
 frontend/src/
 frontend/public/
 frontend/package.json
@@ -14,3 +21,6 @@ frontend/package-lock.json
 frontend/vite.config.js
 frontend/eslint.config.js
 frontend/README.md
+python_modules/
+python_modules/**
+uv.lock

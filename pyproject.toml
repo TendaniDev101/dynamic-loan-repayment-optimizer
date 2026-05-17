@@ -7,10 +7,7 @@ name = "dynamic-loan-repayment-optimizer"
 version = "0.1.0"
 description = "Loan repayment optimizer adapted for Cloudflare Workers"
 requires-python = ">=3.12"
-dependencies = [
-  "fastapi>=0.115,<1.0",
-  "pydantic>=2.9,<3.0",
-]
+dependencies = []
 
 
 [dependency-groups]

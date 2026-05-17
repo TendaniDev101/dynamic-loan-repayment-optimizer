@@ -7,8 +7,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from .calculator import PRICING_TIERS, optimize_loan
-from .models import LoanRequest, OptimizationResponse
+from .core import get_config_payload, optimize_request_data
+from .models import LoanRequest
 
 app = FastAPI(title="Loan Optimization Engine API")
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -30,24 +30,12 @@ def healthcheck() -> dict[str, str]:
 
 @app.get("/api/config")
 def get_config() -> dict[str, object]:
-    return {
-        "term_options": [12, 24, 36, 48, 60],
-        "pricing_tiers": [
-            {
-                "tier": tier.tier,
-                "score_min": tier.score_min,
-                "score_max": tier.score_max,
-                "risk_category": tier.risk_category,
-                "risk_premium": tier.risk_premium,
-            }
-            for tier in PRICING_TIERS
-        ],
-    }
+    return get_config_payload()
 
 
-@app.post("/api/optimize", response_model=OptimizationResponse)
-def optimize(request: LoanRequest) -> OptimizationResponse:
-    return optimize_loan(request)
+@app.post("/api/optimize")
+def optimize(request: LoanRequest) -> dict[str, object]:
+    return optimize_request_data(request.model_dump())
 
 
 if FRONTEND_DIST_DIR.exists():
