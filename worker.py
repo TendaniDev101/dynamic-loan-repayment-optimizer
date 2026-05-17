@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 from urllib.parse import urlparse
 
-from js import JSON
 from workers import Response, WorkerEntrypoint
 
 from backend.app.core import LoanValidationError, get_config_payload, optimize_request_data
@@ -29,11 +28,13 @@ class Default(WorkerEntrypoint):
             if method != "POST":
                 return Response("Method not allowed.", headers={"Allow": "POST"}, status=405)
             try:
-                payload = json.loads(JSON.stringify(await request.json()))
+                payload = json.loads(await request.text())
                 return Response.json(optimize_request_data(payload))
+            except json.JSONDecodeError:
+                return Response.json({"detail": "Invalid JSON request body."}, status=400)
             except LoanValidationError as exc:
                 return Response.json({"detail": str(exc)}, status=422)
             except Exception:
-                return Response.json({"detail": "Invalid JSON request body."}, status=400)
+                return Response.json({"detail": "Failed to process optimization request."}, status=500)
 
         return Response("Not found.", status=404)
