@@ -9,6 +9,8 @@ It combines a React frontend with a FastAPI backend to show:
 - payoff term reduction
 - amortization schedule and payment composition
 
+The project also includes a Cloudflare Worker setup so the FastAPI API and built frontend can be served from the same Cloudflare deployment.
+
 ## Run locally
 
 ```bash
@@ -25,8 +27,31 @@ docker compose up --build
 
 Then open `http://localhost:8000`.
 
+## Run on Cloudflare Workers
+
+Install the required local tools first:
+- Node.js 24+
+- `uv`
+
+Then install dependencies and start local Worker development:
+
+```bash
+cd frontend && npm install && cd ..
+uv sync --group dev
+uv run pywrangler dev
+```
+
+To deploy to Cloudflare:
+
+```bash
+uv run pywrangler deploy
+```
+
+The Worker configuration lives in `wrangler.jsonc`, the Python Worker entrypoint is `worker.py`, and the frontend is deployed as static assets from `frontend/dist`.
+
 ## Stack
 
 - React + Vite
 - FastAPI
+- Cloudflare Workers (Python)
 - Docker / Docker Compose
