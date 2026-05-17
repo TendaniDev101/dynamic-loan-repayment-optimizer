@@ -9,6 +9,7 @@
     "watch_dir": "frontend"
   },
   "assets": {
+    
     "directory": "./frontend/dist",
     "binding": "ASSETS",
     "not_found_handling": "single-page-application",
