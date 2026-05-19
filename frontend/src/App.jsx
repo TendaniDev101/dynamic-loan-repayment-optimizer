@@ -1,4 +1,12 @@
-import { lazy, startTransition, Suspense, useDeferredValue, useEffect, useState } from "react";
+import {
+  lazy,
+  startTransition,
+  Suspense,
+  useDeferredValue,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { fetchOptimization } from "./api";
 import {
   formatCurrency,
@@ -32,6 +40,9 @@ export default function App() {
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [oneTimePanelHeight, setOneTimePanelHeight] = useState(null);
+  const loanInputsRef = useRef(null);
+  const recurringPaymentsRef = useRef(null);
 
   const validationErrors = validateForm(inputs, oneTimePayments);
   const hasValidationErrors = Object.keys(validationErrors).length > 0;
@@ -91,6 +102,38 @@ export default function App() {
     return () => window.clearTimeout(timeoutId);
   }, [deferredRequestPayload, hasValidationErrors]);
 
+  useEffect(() => {
+    const updateOneTimePanelHeight = () => {
+      if (window.innerWidth <= 1180) {
+        setOneTimePanelHeight(null);
+        return;
+      }
+
+      const measuredHeight = Math.max(
+        loanInputsRef.current?.offsetHeight ?? 0,
+        recurringPaymentsRef.current?.offsetHeight ?? 0,
+      );
+      setOneTimePanelHeight(measuredHeight > 0 ? measuredHeight : null);
+    };
+
+    updateOneTimePanelHeight();
+
+    const resizeObserver = new ResizeObserver(updateOneTimePanelHeight);
+    if (loanInputsRef.current) {
+      resizeObserver.observe(loanInputsRef.current);
+    }
+    if (recurringPaymentsRef.current) {
+      resizeObserver.observe(recurringPaymentsRef.current);
+    }
+
+    window.addEventListener("resize", updateOneTimePanelHeight);
+
+    return () => {
+      resizeObserver.disconnect();
+      window.removeEventListener("resize", updateOneTimePanelHeight);
+    };
+  }, [isManualRateMode, isPaymentRecastMode, oneTimePayments.length]);
+
   const optimizedSchedule = result?.optimized.schedule ?? [];
   const baseInstallmentAmount =
     result?.baseline.summary?.scheduled_monthly_outflow ?? null;
@@ -116,7 +159,7 @@ export default function App() {
       </header>
 
       <section className="input-grid">
-        <section className="panel-section input-card">
+        <section ref={loanInputsRef} className="panel-section input-card">
           <h2>Loan Inputs</h2>
           <label>
             Principal
@@ -254,7 +297,7 @@ export default function App() {
           )}
         </section>
 
-        <section className="panel-section input-card">
+        <section ref={recurringPaymentsRef} className="panel-section input-card">
           <h2>Recurring Extra Payments</h2>
           <label>
             <span className="field-label-row">
@@ -345,7 +388,10 @@ export default function App() {
           </p>
         </section>
 
-        <section className="panel-section input-card one-time-panel">
+        <section
+          className="panel-section input-card one-time-panel"
+          style={oneTimePanelHeight ? { height: `${oneTimePanelHeight}px` } : undefined}
+        >
           <div className="section-heading">
             <h2>One-Time Payments</h2>
             <button
