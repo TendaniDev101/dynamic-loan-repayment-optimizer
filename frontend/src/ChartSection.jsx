@@ -51,7 +51,7 @@ export default function ChartSection({ result, paymentCompositionData }) {
       <article className="chart-card">
         <div className="card-heading">
           <h3>Payment Composition</h3>
-          <p>How interest, base principal, and extra principal evolve each month.</p>
+          <p>How interest, base principal, service fees, and extra principal evolve each month.</p>
         </div>
         <ResponsiveContainer width="100%" height={320}>
           <BarChart data={paymentCompositionData}>
@@ -64,6 +64,7 @@ export default function ChartSection({ result, paymentCompositionData }) {
             />
             <Bar dataKey="Interest" stackId="payment" fill="#fb7185" />
             <Bar dataKey="BasePrincipal" stackId="payment" fill="#60a5fa" />
+            <Bar dataKey="ServiceFee" stackId="payment" fill="#facc15" />
             <Bar dataKey="ExtraPrincipal" stackId="payment" fill="#22c55e" />
           </BarChart>
         </ResponsiveContainer>
@@ -108,4 +109,3 @@ const tooltipStyle = {
   border: "1px solid rgba(148, 163, 184, 0.2)",
   borderRadius: "16px",
 };
-

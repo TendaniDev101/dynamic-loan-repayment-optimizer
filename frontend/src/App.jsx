@@ -13,7 +13,9 @@ const ChartSection = lazy(() => import("./ChartSection"));
 
 const initialInputs = {
   principal: 250000,
+  monthlyServiceFee: "0.00",
   termMonths: 60,
+  repaymentStrategy: "termReduction",
   pricingMode: "creditScore",
   creditScore: 705,
   annualRate: "11.75",
@@ -34,12 +36,15 @@ export default function App() {
   const validationErrors = validateForm(inputs, oneTimePayments);
   const hasValidationErrors = Object.keys(validationErrors).length > 0;
   const isManualRateMode = inputs.pricingMode === "manualRate";
+  const isPaymentRecastMode = inputs.repaymentStrategy === "paymentRecast";
   const recurringExtraAmount = Number(inputs.recurringExtraPayment) || 0;
   const recurringFrequencyMonths = Number(inputs.recurringFrequencyMonths) || 1;
 
   const requestPayload = JSON.stringify({
     principal: Number(inputs.principal),
+    monthly_service_fee: Number(inputs.monthlyServiceFee) || 0,
     term_months: Number(inputs.termMonths),
+    repayment_strategy: isPaymentRecastMode ? "payment_recast" : "term_reduction",
     ...(isManualRateMode
       ? { annual_rate: Number(inputs.annualRate) }
       : { credit_score: Number(inputs.creditScore) }),
@@ -87,13 +92,17 @@ export default function App() {
   }, [deferredRequestPayload, hasValidationErrors]);
 
   const optimizedSchedule = result?.optimized.schedule ?? [];
-  const baseInstallmentAmount = result?.baseline.schedule?.[0]?.scheduled_payment ?? null;
+  const baseInstallmentAmount =
+    result?.baseline.summary?.scheduled_monthly_outflow ?? null;
   const paymentCompositionData = optimizedSchedule.map((row) => ({
     month: row.month,
     Interest: row.interest_payment,
     BasePrincipal: row.base_principal_payment,
+    ServiceFee: row.service_fee,
     ExtraPrincipal: row.extra_payment,
   }));
+  const activeRepaymentStrategy =
+    result?.repayment_strategy ?? (isPaymentRecastMode ? "payment_recast" : "term_reduction");
 
   return (
     <div className="app-shell">
@@ -122,6 +131,38 @@ export default function App() {
               }
             />
             <FieldError message={validationErrors.principal} />
+          </label>
+
+          <label>
+            Monthly Service Fee
+            <FormattedMoneyInput
+              value={inputs.monthlyServiceFee}
+              onChange={(event) =>
+                setInputs((current) => ({
+                  ...current,
+                  monthlyServiceFee: event.target.value,
+                }))
+              }
+            />
+          </label>
+
+          <label>
+            Repayment Strategy
+            <div className="term-input">
+              <span className="term-prefix">Mode</span>
+              <select
+                value={inputs.repaymentStrategy}
+                onChange={(event) =>
+                  setInputs((current) => ({
+                    ...current,
+                    repaymentStrategy: event.target.value,
+                  }))
+                }
+              >
+                <option value="termReduction">Term Reduction</option>
+                <option value="paymentRecast">Lower Installments</option>
+              </select>
+            </div>
           </label>
 
           <label>
@@ -217,7 +258,11 @@ export default function App() {
           <h2>Recurring Extra Payments</h2>
           <label>
             <span className="field-label-row">
-              <span>Base Repayment</span>
+              <span>
+                {activeRepaymentStrategy === "payment_recast"
+                  ? "Starting Repayment"
+                  : "Base Repayment"}
+              </span>
               <span className="readonly-badge">Auto-calculated</span>
             </span>
             <ReadonlyMoneyField
@@ -291,6 +336,9 @@ export default function App() {
             </label>
           </div>
           <p className="field-note">
+            {isPaymentRecastMode
+              ? "Each extra payment reduces the outstanding balance and recalculates a lower scheduled installment for the remaining original term."
+              : "Each extra payment goes straight to principal while keeping the scheduled installment fixed, which shortens the payoff term."}{" "}
             The extra repayment repeats from the first month of the loan, then every{" "}
             {inputs.recurringFrequencyMonths || 1} month
             {Number(inputs.recurringFrequencyMonths || 1) === 1 ? "" : "s"} after that.
@@ -445,11 +493,25 @@ export default function App() {
             </p>
           </div>
           <div className="hero-metric">
-            <span>Optimized payoff</span>
+            <span>
+              {activeRepaymentStrategy === "payment_recast"
+                ? "Original payoff term"
+                : "Optimized payoff"}
+            </span>
             <strong>
               {result ? `${result.optimized.summary.actual_term_months} months` : "--"}
             </strong>
           </div>
+        </section>
+
+        <section className="disclaimer-card" aria-label="Calculator disclaimer">
+          <p className="eyebrow">Important Disclaimer</p>
+          <p>
+            This calculator models loan repayment using principal, interest rate, term,
+            monthly service fees, and extra payments. It does not include initiation
+            fees, insurance premiums, penalties, taxes, or any other lender charges
+            that may apply to the money borrowed.
+          </p>
         </section>
 
         <section className="kpi-grid">
@@ -466,10 +528,29 @@ export default function App() {
             gain={result?.deltas.total_interest_saved}
           />
           <MetricCard
-            label="Time To Zero Debt"
+            label="Service Fees"
+            baseline={result?.baseline.summary.total_service_fees}
+            optimized={result?.optimized.summary.total_service_fees}
+            gain={
+              result
+                ? result.baseline.summary.total_service_fees -
+                  result.optimized.summary.total_service_fees
+                : null
+            }
+          />
+          <MetricCard
+            label={
+              activeRepaymentStrategy === "payment_recast"
+                ? "Payoff Term"
+                : "Time To Zero Debt"
+            }
             baseline={result?.baseline.summary.actual_term_months}
             optimized={result?.optimized.summary.actual_term_months}
-            gain={result?.deltas.months_saved}
+            gain={
+              activeRepaymentStrategy === "payment_recast"
+                ? null
+                : result?.deltas.months_saved
+            }
             formatValue={(value) => `${value} months`}
           />
         </section>
@@ -497,9 +578,11 @@ export default function App() {
                   <th>Month</th>
                   <th>Opening</th>
                   <th>Repayment</th>
+                  <th>Service Fee</th>
                   <th>Interest</th>
                   <th>Base Principal</th>
                   <th>Extra Payment</th>
+                  <th>Total Paid</th>
                   <th>Closing</th>
                 </tr>
               </thead>
@@ -509,6 +592,7 @@ export default function App() {
                     <td>{row.month}</td>
                     <td>{formatCurrency(row.opening_balance)}</td>
                     <td>{formatCurrency(row.scheduled_payment)}</td>
+                    <td>{formatCurrency(row.service_fee)}</td>
                     <td>{formatCurrency(row.interest_payment)}</td>
                     <td>{formatCurrency(row.base_principal_payment)}</td>
                     <td>
@@ -524,6 +608,7 @@ export default function App() {
                         }
                       />
                     </td>
+                    <td>{formatCurrency(row.total_payment)}</td>
                     <td>{formatCurrency(row.closing_balance)}</td>
                   </tr>
                 ))}

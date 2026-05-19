@@ -42,6 +42,73 @@ class CalculatorTests(unittest.TestCase):
         self.assertIsNone(result.pricing.tier)
         self.assertGreater(result.deltas.total_interest_saved, 0)
 
+    def test_payment_recast_keeps_term_but_reduces_future_installments(self) -> None:
+        request = LoanRequest(
+            principal=100000,
+            term_months=60,
+            credit_score=700,
+            repayment_strategy="payment_recast",
+            scenario=ScenarioInput(
+                one_time_payments=[OneTimePayment(month=12, amount=5000)],
+            ),
+        )
+
+        result = optimize_loan(request)
+
+        self.assertEqual(result.repayment_strategy, "payment_recast")
+        self.assertEqual(
+            result.optimized.summary.actual_term_months,
+            result.baseline.summary.actual_term_months,
+        )
+        self.assertEqual(result.deltas.months_saved, 0)
+        self.assertLess(
+            result.optimized.schedule[12].scheduled_payment,
+            result.baseline.schedule[12].scheduled_payment,
+        )
+        self.assertGreater(result.deltas.total_interest_saved, 0)
+
+    def test_monthly_service_fee_increases_total_paid_without_changing_interest(self) -> None:
+        base_request = LoanRequest(
+            principal=50000,
+            term_months=12,
+            credit_score=760,
+        )
+        fee_request = LoanRequest(
+            principal=50000,
+            term_months=12,
+            credit_score=760,
+            monthly_service_fee=69,
+        )
+
+        base_result = optimize_loan(base_request)
+        fee_result = optimize_loan(fee_request)
+
+        self.assertEqual(
+            fee_result.baseline.summary.actual_term_months,
+            base_result.baseline.summary.actual_term_months,
+        )
+        self.assertEqual(
+            fee_result.baseline.summary.total_interest,
+            base_result.baseline.summary.total_interest,
+        )
+        self.assertEqual(fee_result.baseline.summary.total_service_fees, 828)
+        self.assertEqual(
+            round(
+                fee_result.baseline.summary.total_paid
+                - base_result.baseline.summary.total_paid,
+                2,
+            ),
+            828,
+        )
+        self.assertEqual(
+            round(
+                fee_result.baseline.summary.scheduled_monthly_outflow
+                - base_result.baseline.summary.scheduled_monthly_outflow,
+                2,
+            ),
+            69,
+        )
+
     def test_extra_schedule_combines_rule_types(self) -> None:
         request = LoanRequest(
             principal=50000,

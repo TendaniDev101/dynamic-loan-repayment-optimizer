@@ -33,6 +33,8 @@ class LoanRequest(BaseModel):
     term_months: int = Field(ge=1, le=360)
     credit_score: int | None = Field(default=None, ge=300, le=850)
     annual_rate: float | None = Field(default=None, ge=0, allow_inf_nan=False)
+    monthly_service_fee: float = Field(default=0, ge=0, allow_inf_nan=False)
+    repayment_strategy: Literal["term_reduction", "payment_recast"] = "term_reduction"
     scenario: ScenarioInput = Field(default_factory=ScenarioInput)
 
     @model_validator(mode="after")
@@ -69,6 +71,7 @@ class ScheduleRow(BaseModel):
     month: int
     opening_balance: float
     scheduled_payment: float
+    service_fee: float
     interest_payment: float
     base_principal_payment: float
     extra_payment: float
@@ -80,8 +83,11 @@ class LoanSummary(BaseModel):
     total_paid: float
     total_interest: float
     total_extra_paid: float
+    total_service_fees: float
     actual_term_months: int
     monthly_payment: float
+    scheduled_monthly_outflow: float
+    monthly_service_fee: float
     annual_rate: float
     monthly_rate: float
 
@@ -98,6 +104,7 @@ class DeltaSummary(BaseModel):
 
 
 class OptimizationResponse(BaseModel):
+    repayment_strategy: Literal["term_reduction", "payment_recast"]
     pricing: PricingDetails
     baseline: LoanScenarioResult
     optimized: LoanScenarioResult

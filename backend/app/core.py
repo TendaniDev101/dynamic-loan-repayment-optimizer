@@ -37,6 +37,16 @@ class LoanValidationError(ValueError):
 def get_config_payload() -> dict[str, object]:
     return {
         "term_options": TERM_OPTIONS,
+        "repayment_strategies": [
+            {
+                "value": "term_reduction",
+                "label": "Pay Off Faster",
+            },
+            {
+                "value": "payment_recast",
+                "label": "Lower My Monthly Payment",
+            },
+        ],
         "pricing_tiers": [
             {
                 "tier": tier.tier,
@@ -57,12 +67,16 @@ def optimize_request_data(payload: dict[str, Any]) -> dict[str, object]:
         principal=request["principal"],
         term_months=request["term_months"],
         annual_rate=pricing["total_annual_rate"],
+        monthly_service_fee=request["monthly_service_fee"],
+        repayment_strategy="term_reduction",
         scenario={},
     )
     optimized = build_scenario_result(
         principal=request["principal"],
         term_months=request["term_months"],
         annual_rate=pricing["total_annual_rate"],
+        monthly_service_fee=request["monthly_service_fee"],
+        repayment_strategy=request["repayment_strategy"],
         scenario=build_monthly_extras(request),
     )
     deltas = {
@@ -80,6 +94,7 @@ def optimize_request_data(payload: dict[str, Any]) -> dict[str, object]:
         ),
     }
     return {
+        "repayment_strategy": request["repayment_strategy"],
         "pricing": pricing,
         "baseline": baseline,
         "optimized": optimized,
@@ -94,6 +109,17 @@ def normalize_request(payload: dict[str, Any]) -> dict[str, Any]:
     principal = parse_number(payload.get("principal"), "Principal")
     if principal <= 0:
         raise LoanValidationError("Principal must be greater than zero.")
+
+    monthly_service_fee = parse_number(
+        payload.get("monthly_service_fee", 0),
+        "Monthly service fee",
+    )
+    if monthly_service_fee < 0:
+        raise LoanValidationError("Monthly service fee cannot be negative.")
+
+    repayment_strategy = payload.get("repayment_strategy", "term_reduction")
+    if repayment_strategy not in {"term_reduction", "payment_recast"}:
+        raise LoanValidationError("Repayment strategy is not supported.")
 
     term_months = parse_int(payload.get("term_months"), "Term")
     if term_months < 1 or term_months > 360:
@@ -177,6 +203,8 @@ def normalize_request(payload: dict[str, Any]) -> dict[str, Any]:
         "term_months": term_months,
         "credit_score": credit_score,
         "annual_rate": annual_rate,
+        "monthly_service_fee": monthly_service_fee,
+        "repayment_strategy": repayment_strategy,
         "scenario": {
             "global_extra_payment": global_extra_payment,
             "interval_extra_payment": interval_extra_payment,
@@ -267,28 +295,34 @@ def build_scenario_result(
     principal: float,
     term_months: int,
     annual_rate: float,
+    monthly_service_fee: float,
+    repayment_strategy: str,
     scenario: dict[int, float],
 ) -> dict[str, object]:
     monthly_rate = annual_rate / 100 / 12
-    monthly_payment = calculate_monthly_payment(principal, term_months, monthly_rate)
+    contractual_monthly_payment = calculate_monthly_payment(principal, term_months, monthly_rate)
+    current_monthly_payment = contractual_monthly_payment
+    scheduled_monthly_outflow = contractual_monthly_payment + monthly_service_fee
 
     balance = principal
     rows: list[dict[str, object]] = []
     total_paid = 0.0
     total_interest = 0.0
     total_extra_paid = 0.0
+    total_service_fees = 0.0
 
     for month in range(1, term_months + 1):
         opening_balance = balance
         interest_payment = opening_balance * monthly_rate
-        scheduled_principal = min(monthly_payment - interest_payment, opening_balance)
+        scheduled_principal = min(current_monthly_payment - interest_payment, opening_balance)
         scheduled_payment = interest_payment + scheduled_principal
 
         requested_extra = max(scenario.get(month, 0.0), 0.0)
         max_extra = max(opening_balance - scheduled_principal, 0.0)
         extra_payment = min(requested_extra, max_extra)
 
-        total_payment = scheduled_payment + extra_payment
+        service_fee = monthly_service_fee
+        total_payment = scheduled_payment + extra_payment + service_fee
         closing_balance = max(opening_balance - scheduled_principal - extra_payment, 0.0)
 
         rows.append(
@@ -296,6 +330,7 @@ def build_scenario_result(
                 "month": month,
                 "opening_balance": round(opening_balance, 2),
                 "scheduled_payment": round(scheduled_payment, 2),
+                "service_fee": round(service_fee, 2),
                 "interest_payment": round(interest_payment, 2),
                 "base_principal_payment": round(scheduled_principal, 2),
                 "extra_payment": round(extra_payment, 2),
@@ -307,7 +342,21 @@ def build_scenario_result(
         total_paid += total_payment
         total_interest += interest_payment
         total_extra_paid += extra_payment
+        total_service_fees += service_fee
         balance = closing_balance
+
+        if (
+            repayment_strategy == "payment_recast"
+            and extra_payment > 0
+            and balance > EPSILON
+            and month < term_months
+        ):
+            remaining_months = term_months - month
+            current_monthly_payment = calculate_monthly_payment(
+                balance,
+                remaining_months,
+                monthly_rate,
+            )
 
         if balance <= EPSILON:
             break
@@ -317,8 +366,11 @@ def build_scenario_result(
             "total_paid": round(total_paid, 2),
             "total_interest": round(total_interest, 2),
             "total_extra_paid": round(total_extra_paid, 2),
+            "total_service_fees": round(total_service_fees, 2),
             "actual_term_months": len(rows),
-            "monthly_payment": round(monthly_payment, 2),
+            "monthly_payment": round(contractual_monthly_payment, 2),
+            "scheduled_monthly_outflow": round(scheduled_monthly_outflow, 2),
+            "monthly_service_fee": round(monthly_service_fee, 2),
             "annual_rate": round(annual_rate, 2),
             "monthly_rate": round(monthly_rate * 100, 4),
         },
