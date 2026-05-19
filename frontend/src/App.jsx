@@ -8,13 +8,15 @@ import {
   sanitizeDecimalInput,
 } from "./formatters";
 
-const termOptions = [12, 24, 36, 48, 60];
+const termOptions = [6, 12, 18, 24, 30, 36, 42, 48, 54, 60, 66, 72];
 const ChartSection = lazy(() => import("./ChartSection"));
 
 const initialInputs = {
   principal: 250000,
   termMonths: 60,
+  pricingMode: "creditScore",
   creditScore: 705,
+  annualRate: "11.75",
   recurringExtraPayment: 5000,
   recurringFrequencyMonths: 12,
 };
@@ -31,13 +33,16 @@ export default function App() {
 
   const validationErrors = validateForm(inputs, oneTimePayments);
   const hasValidationErrors = Object.keys(validationErrors).length > 0;
+  const isManualRateMode = inputs.pricingMode === "manualRate";
   const recurringExtraAmount = Number(inputs.recurringExtraPayment) || 0;
   const recurringFrequencyMonths = Number(inputs.recurringFrequencyMonths) || 1;
 
   const requestPayload = JSON.stringify({
     principal: Number(inputs.principal),
     term_months: Number(inputs.termMonths),
-    credit_score: Number(inputs.creditScore),
+    ...(isManualRateMode
+      ? { annual_rate: Number(inputs.annualRate) }
+      : { credit_score: Number(inputs.creditScore) }),
     scenario: {
       global_extra_payment: recurringFrequencyMonths === 1 ? recurringExtraAmount : 0,
       interval_extra_payment: recurringFrequencyMonths > 1 ? recurringExtraAmount : 0,
@@ -120,6 +125,25 @@ export default function App() {
           </label>
 
           <label>
+            Pricing Method
+            <div className="term-input">
+              <span className="term-prefix">Mode</span>
+              <select
+                value={inputs.pricingMode}
+                onChange={(event) =>
+                  setInputs((current) => ({
+                    ...current,
+                    pricingMode: event.target.value,
+                  }))
+                }
+              >
+                <option value="creditScore">Use Credit Score</option>
+                <option value="manualRate">Set Interest Rate</option>
+              </select>
+            </div>
+          </label>
+
+          <label>
             Term
             <div className="term-input">
               <span className="term-prefix">Months</span>
@@ -154,22 +178,39 @@ export default function App() {
             </div>
           </label>
 
-          <label>
-            Credit Score
-            <div className="range-value">{inputs.creditScore}</div>
-            <input
-              type="range"
-              min="300"
-              max="850"
-              value={inputs.creditScore}
-              onChange={(event) =>
-                setInputs((current) => ({
-                  ...current,
-                  creditScore: event.target.value,
-                }))
-              }
-            />
-          </label>
+          {isManualRateMode ? (
+            <label>
+              Annual Interest Rate (%)
+              <FormattedPercentInput
+                invalid={Boolean(validationErrors.annualRate)}
+                value={inputs.annualRate}
+                onChange={(event) =>
+                  setInputs((current) => ({
+                    ...current,
+                    annualRate: event.target.value,
+                  }))
+                }
+              />
+              <FieldError message={validationErrors.annualRate} />
+            </label>
+          ) : (
+            <label>
+              Credit Score
+              <div className="range-value">{inputs.creditScore}</div>
+              <input
+                type="range"
+                min="300"
+                max="850"
+                value={inputs.creditScore}
+                onChange={(event) =>
+                  setInputs((current) => ({
+                    ...current,
+                    creditScore: event.target.value,
+                  }))
+                }
+              />
+            </label>
+          )}
         </section>
 
         <section className="panel-section input-card">
@@ -386,14 +427,21 @@ export default function App() {
             <p className="eyebrow">Pricing Snapshot</p>
             <h2>
               {result
-                ? `${result.pricing.tier} at ${formatPercent(result.pricing.total_annual_rate)} APR`
+                ? result.pricing.pricing_method === "manual_rate"
+                  ? `Manual rate at ${formatPercent(result.pricing.total_annual_rate)} APR`
+                  : `${result.pricing.tier} at ${formatPercent(result.pricing.total_annual_rate)} APR`
                 : "Loading pricing model"}
             </h2>
             <p className="hero-copy">
-              Base rate {result ? formatPercent(result.pricing.base_rate) : "--"} plus
-              risk premium{" "}
-              {result ? formatPercent(result.pricing.risk_premium) : "--"} for scores in{" "}
-              {result ? result.pricing.score_range : "--"}.
+              {result
+                ? result.pricing.pricing_method === "manual_rate"
+                  ? `Annual interest rate entered directly at ${formatPercent(
+                      result.pricing.manual_rate,
+                    )}, without using credit-score pricing.`
+                  : `Base rate ${formatPercent(result.pricing.base_rate)} plus risk premium ${formatPercent(
+                      result.pricing.risk_premium,
+                    )} for scores in ${result.pricing.score_range}.`
+                : "Loading pricing details."}
             </p>
           </div>
           <div className="hero-metric">
@@ -556,6 +604,53 @@ function FieldError({ message }) {
   return <span className="field-error">{message}</span>;
 }
 
+function FormattedPercentInput({
+  value,
+  onChange,
+  className = "",
+  placeholder = "",
+  invalid = false,
+}) {
+  const [isFocused, setIsFocused] = useState(false);
+
+  const commitValue = (nextValue) => {
+    onChange({ target: { value: normalizeDecimalInput(nextValue) } });
+    setIsFocused(false);
+  };
+
+  const displayValue = isFocused
+    ? String(value ?? "")
+    : formatGroupedDecimal(normalizeDecimalInput(String(value ?? "")));
+
+  return (
+    <div className={`currency-input ${invalid ? "field-invalid" : ""} ${className}`.trim()}>
+      <span className="currency-prefix">APR</span>
+      <input
+        type="text"
+        inputMode="decimal"
+        value={displayValue}
+        placeholder={placeholder}
+        onFocus={() => setIsFocused(true)}
+        onBlur={(event) => commitValue(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key !== "Enter") {
+            return;
+          }
+
+          event.preventDefault();
+          commitValue(event.currentTarget.value);
+          event.currentTarget.blur();
+        }}
+        onChange={(event) => {
+          onChange({
+            target: { value: sanitizeDecimalInput(event.target.value) },
+          });
+        }}
+      />
+    </div>
+  );
+}
+
 function ReadonlyMoneyField({ value, placeholder = "--", className = "" }) {
   const displayValue = value == null ? placeholder : formatGroupedDecimal(value);
 
@@ -582,6 +677,13 @@ function validateForm(inputs, oneTimePayments) {
     frequencyValue > Number(inputs.termMonths)
   ) {
     errors.recurringFrequencyMonths = `Enter a value between 1 and ${inputs.termMonths}.`;
+  }
+
+  if (inputs.pricingMode === "manualRate") {
+    const annualRateValue = Number(inputs.annualRate);
+    if (inputs.annualRate === "" || Number.isNaN(annualRateValue) || annualRateValue < 0) {
+      errors.annualRate = "Enter an annual interest rate of 0 or greater.";
+    }
   }
 
   for (const payment of oneTimePayments) {

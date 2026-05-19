@@ -19,7 +19,7 @@ class PricingTier:
 
 
 BASE_RATE = 9.75
-TERM_OPTIONS = [12, 24, 36, 48, 60]
+TERM_OPTIONS = [6, 12, 18, 24, 30, 36, 42, 48, 54, 60, 66, 72]
 PRICING_TIERS = [
     PricingTier("AAA / Exceptional", 750, 850, "Minimum Risk", 0.50),
     PricingTier("A / Good", 680, 749, "Moderate Risk", 2.00),
@@ -52,7 +52,7 @@ def get_config_payload() -> dict[str, object]:
 
 def optimize_request_data(payload: dict[str, Any]) -> dict[str, object]:
     request = normalize_request(payload)
-    pricing = resolve_pricing(request["credit_score"])
+    pricing = resolve_pricing(request)
     baseline = build_scenario_result(
         principal=request["principal"],
         term_months=request["term_months"],
@@ -99,9 +99,23 @@ def normalize_request(payload: dict[str, Any]) -> dict[str, Any]:
     if term_months < 1 or term_months > 360:
         raise LoanValidationError("Term must be between 1 and 360 months.")
 
-    credit_score = parse_int(payload.get("credit_score"), "Credit score")
-    if credit_score < 300 or credit_score > 850:
-        raise LoanValidationError("Credit score must be between 300 and 850.")
+    credit_score_raw = payload.get("credit_score")
+    annual_rate_raw = payload.get("annual_rate")
+    has_credit_score = value_is_present(credit_score_raw)
+    has_annual_rate = value_is_present(annual_rate_raw)
+    if has_credit_score == has_annual_rate:
+        raise LoanValidationError("Provide either a credit score or an annual interest rate.")
+
+    credit_score = None
+    annual_rate = None
+    if has_credit_score:
+        credit_score = parse_int(credit_score_raw, "Credit score")
+        if credit_score < 300 or credit_score > 850:
+            raise LoanValidationError("Credit score must be between 300 and 850.")
+    else:
+        annual_rate = parse_number(annual_rate_raw, "Annual interest rate")
+        if annual_rate < 0:
+            raise LoanValidationError("Annual interest rate cannot be negative.")
 
     scenario_raw = payload.get("scenario") or {}
     if not isinstance(scenario_raw, dict):
@@ -162,6 +176,7 @@ def normalize_request(payload: dict[str, Any]) -> dict[str, Any]:
         "principal": principal,
         "term_months": term_months,
         "credit_score": credit_score,
+        "annual_rate": annual_rate,
         "scenario": {
             "global_extra_payment": global_extra_payment,
             "interval_extra_payment": interval_extra_payment,
@@ -192,17 +207,37 @@ def parse_int(value: Any, label: str) -> int:
     return number
 
 
-def resolve_pricing(credit_score: int) -> dict[str, object]:
+def value_is_present(value: Any) -> bool:
+    return value is not None and value != ""
+
+
+def resolve_pricing(request: dict[str, Any]) -> dict[str, object]:
+    annual_rate = request.get("annual_rate")
+    if annual_rate is not None:
+        return {
+            "pricing_method": "manual_rate",
+            "base_rate": None,
+            "risk_premium": None,
+            "total_annual_rate": round(annual_rate, 2),
+            "tier": None,
+            "risk_category": None,
+            "score_range": None,
+            "manual_rate": round(annual_rate, 2),
+        }
+
+    credit_score = request["credit_score"]
     for tier in PRICING_TIERS:
         if tier.score_min <= credit_score <= tier.score_max:
             total_annual_rate = round(BASE_RATE + tier.risk_premium, 2)
             return {
+                "pricing_method": "credit_score",
                 "base_rate": BASE_RATE,
                 "risk_premium": tier.risk_premium,
                 "total_annual_rate": total_annual_rate,
                 "tier": tier.tier,
                 "risk_category": tier.risk_category,
                 "score_range": tier.score_range,
+                "manual_rate": None,
             }
     raise LoanValidationError("Unsupported credit score.")
 

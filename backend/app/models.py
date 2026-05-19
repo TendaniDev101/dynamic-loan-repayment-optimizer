@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 
@@ -29,11 +31,15 @@ class ScenarioInput(BaseModel):
 class LoanRequest(BaseModel):
     principal: float = Field(gt=0, allow_inf_nan=False)
     term_months: int = Field(ge=1, le=360)
-    credit_score: int = Field(ge=300, le=850)
+    credit_score: int | None = Field(default=None, ge=300, le=850)
+    annual_rate: float | None = Field(default=None, ge=0, allow_inf_nan=False)
     scenario: ScenarioInput = Field(default_factory=ScenarioInput)
 
     @model_validator(mode="after")
     def validate_scenario_bounds(self) -> "LoanRequest":
+        if (self.credit_score is None) == (self.annual_rate is None):
+            raise ValueError("Provide either a credit score or an annual interest rate.")
+
         if self.scenario.interval_months > self.term_months:
             raise ValueError("Recurring payment frequency cannot exceed the loan term.")
 
@@ -49,12 +55,14 @@ class LoanRequest(BaseModel):
 
 
 class PricingDetails(BaseModel):
-    base_rate: float
-    risk_premium: float
+    pricing_method: Literal["credit_score", "manual_rate"]
+    base_rate: float | None = None
+    risk_premium: float | None = None
     total_annual_rate: float
-    tier: str
-    risk_category: str
-    score_range: str
+    tier: str | None = None
+    risk_category: str | None = None
+    score_range: str | None = None
+    manual_rate: float | None = None
 
 
 class ScheduleRow(BaseModel):

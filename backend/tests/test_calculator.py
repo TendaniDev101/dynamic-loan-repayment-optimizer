@@ -27,6 +27,21 @@ class CalculatorTests(unittest.TestCase):
         )
         self.assertGreater(result.deltas.total_interest_saved, 0)
 
+    def test_optimizer_supports_manual_annual_rate(self) -> None:
+        request = LoanRequest(
+            principal=100000,
+            term_months=60,
+            annual_rate=12.5,
+            scenario=ScenarioInput(global_extra_payment=500),
+        )
+
+        result = optimize_loan(request)
+
+        self.assertEqual(result.pricing.pricing_method, "manual_rate")
+        self.assertEqual(result.pricing.total_annual_rate, 12.5)
+        self.assertIsNone(result.pricing.tier)
+        self.assertGreater(result.deltas.total_interest_saved, 0)
+
     def test_extra_schedule_combines_rule_types(self) -> None:
         request = LoanRequest(
             principal=50000,
@@ -73,6 +88,22 @@ class CalculatorTests(unittest.TestCase):
                 term_months=12,
                 credit_score=760,
                 scenario=ScenarioInput(interval_months=24),
+            )
+
+    def test_validation_requires_one_pricing_input(self) -> None:
+        with self.assertRaises(ValidationError):
+            LoanRequest(
+                principal=50000,
+                term_months=12,
+            )
+
+    def test_validation_rejects_both_pricing_inputs(self) -> None:
+        with self.assertRaises(ValidationError):
+            LoanRequest(
+                principal=50000,
+                term_months=12,
+                credit_score=760,
+                annual_rate=11.5,
             )
 
 
